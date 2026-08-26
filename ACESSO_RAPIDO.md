@@ -4,7 +4,7 @@
 
 ✅ **Facebook Bot - Sistema Completo de Automação**
 
-**Localização**: `/home/user/facebook-bot/`
+**Localização**: `/home/user/DARK-FB/`
 
 ---
 
@@ -31,7 +31,7 @@ facebook-bot/
 
 ```bash
 # No diretório raiz do projeto
-cd /home/user/facebook-bot
+cd /home/user/DARK-FB
 
 # Instalar todas as dependências (backend + frontend)
 npm run install:all
@@ -88,9 +88,9 @@ npm start
 - **Health Check**: [http://localhost:5000/api/health](http://localhost:5000/api/health)
 
 ### Produção (após deploy no Render)
-- **Dashboard**: https://facebook-bot-dashboard.onrender.com
-- **API**: https://facebook-bot-api.onrender.com/api
-- **API Docs**: https://facebook-bot-api.onrender.com/api-docs
+- **Dashboard**: https://dark-fb-dashboard.onrender.com
+- **API**: https://dark-fb-api.onrender.com/api
+- **API Docs**: https://dark-fb-api.onrender.com/api-docs
 
 ---
 
@@ -295,7 +295,7 @@ O projeto foi criado com todas as funcionalidades solicitadas:
 - ✅ MongoDB
 - ✅ Dashboard completo
 
-**Pasta do projeto**: `/home/user/facebook-bot/`
+**Pasta do projeto**: `/home/user/DARK-FB/`
 
 ---
 

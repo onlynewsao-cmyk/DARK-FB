@@ -15,7 +15,7 @@ Este é um sistema completo de automação para Facebook que permite:
 
 1. **Acesse o GitHub**: [https://github.com/onlynewsao-cmyk](https://github.com/onlynewsao-cmyk)
 2. **Crie um novo repositório**: Clique em "New" no canto superior direito
-3. **Nome do repositório**: `facebook-bot` (ou outro nome de sua preferência)
+3. **Nome do repositório**: `DARK-FB` (ou outro nome de sua preferência)
 4. **Visibilidade**: Públic (Public) ou Privado (Private)
 5. **Inicializar com README**: ❌ Não marque
 6. **Adicionar .gitignore**: ❌ Não marque
@@ -26,7 +26,7 @@ Este é um sistema completo de automação para Facebook que permite:
 
 ```bash
 # Navegue até a pasta do projeto
-cd /home/user/facebook-bot
+cd /home/user/DARK-FB
 
 # Inicialize o repositório Git
 git init
@@ -38,7 +38,7 @@ git add .
 git commit -m "Initial commit - Facebook Bot complete system"
 
 # Adicione o repositório remoto (substitua SEU_USUARIO pelo seu usuário do GitHub)
-git remote add origin https://github.com/onlynewsao-cmyk/facebook-bot.git
+git remote add origin https://github.com/onlynewsao-cmyk/DARK-FB.git
 
 # Verifique o remote
 git remote -v
@@ -85,7 +85,7 @@ NODE_ENV=development
 
 # MongoDB Configuration
 # Obtenha sua URI do MongoDB Atlas em: https://www.mongodb.com/atlas
-MONGODB_URI=mongodb+srv://<username>:<password>@cluster0.mongodb.net/facebook-bot?retryWrites=true&w=majority
+MONGODB_URI=mongodb+srv://<username>:<password>@cluster0.mongodb.net/DARK-FB?retryWrites=true&w=majority
 
 # JWT Configuration
 JWT_SECRET=sua_chave_secreta_aqui_1234567890
@@ -106,7 +106,7 @@ FACEBOOK_WEBHOOK_VERIFY_TOKEN=sua_chave_verificacao_webhook
 FRONTEND_URL=http://localhost:3000
 
 # Render Configuration (para produção)
-RENDER_URL=https://facebook-bot.onrender.com
+RENDER_URL=https://DARK-FB.onrender.com
 
 # Uptime Monitoring
 UPTIME_ROBOT_API_KEY=sua_api_key_uptime_robot
@@ -226,7 +226,7 @@ O frontend estará disponível em: [http://localhost:3000](http://localhost:3000
 #### Configurar o Banco de Dados MongoDB no Render
 1. No dashboard do Render, clique em "New" > "Database"
 2. **Tipo**: MongoDB
-3. **Nome**: facebook-bot-mongodb
+3. **Nome**: DARK-FB-mongodb
 4. **Plano**: Free
 5. **Região**: Escolha a mais próxima de você
 6. **IP Allow List**: 0.0.0.0/0 (para permitir todas as conexões)
@@ -235,7 +235,7 @@ O frontend estará disponível em: [http://localhost:3000](http://localhost:3000
 
 #### Deploy do Backend
 1. No dashboard do Render, clique em "New" > "Web Service"
-2. **Nome**: facebook-bot-api
+2. **Nome**: DARK-FB-api
 3. **Tipo**: Node
 4. **Região**: Escolha a mesma do banco de dados
 5. **Plano**: Free
@@ -252,20 +252,20 @@ O frontend estará disponível em: [http://localhost:3000](http://localhost:3000
     - `FACEBOOK_APP_SECRET`: (seu App Secret)
     - `FACEBOOK_ACCESS_TOKEN`: (seu Access Token)
     - `FACEBOOK_WEBHOOK_VERIFY_TOKEN`: (gerar uma chave)
-    - `FRONTEND_URL`: https://facebook-bot-dashboard.onrender.com
+    - `FRONTEND_URL`: https://DARK-FB-dashboard.onrender.com
 11. **Auto-Deploy**: ✅ Marque
 12. **Criar Service**
 
 #### Deploy do Frontend
 1. No dashboard do Render, clique em "New" > "Static Site"
-2. **Nome**: facebook-bot-dashboard
+2. **Nome**: DARK-FB-dashboard
 3. **Branch**: main
 4. **Root Directory**: frontend
 5. **Build Command**: `npm install && npm run build`
 6. **Publish Directory**: frontend/build
 7. **Environment Variables**:
-    - `REACT_APP_API_URL`: https://facebook-bot-api.onrender.com/api
-    - `REACT_APP_SOCKET_URL`: https://facebook-bot-api.onrender.com
+    - `REACT_APP_API_URL`: https://DARK-FB-api.onrender.com/api
+    - `REACT_APP_SOCKET_URL`: https://DARK-FB-api.onrender.com
 8. **Auto-Deploy**: ✅ Marque
 9. **Criar Static Site**
 
@@ -273,7 +273,7 @@ O frontend estará disponível em: [http://localhost:3000](http://localhost:3000
 Para publicações agendadas funcionarem, você precisa configurar um Cron Job:
 
 1. No dashboard do Render, clique em "New" > "Cron Job"
-2. **Nome**: facebook-bot-scheduler
+2. **Nome**: DARK-FB-scheduler
 3. **Tipo**: Node
 4. **Região**: Mesma do backend
 5. **Plano**: Free
@@ -289,7 +289,7 @@ Para publicações agendadas funcionarem, você precisa configurar um Cron Job:
 1. No seu app do Facebook Developers, vá em:
    **App Review** > **Webhooks**
 2. **Adicionar Callback URL**:
-   - URL: `https://facebook-bot-api.onrender.com/api/facebook/webhook`
+   - URL: `https://DARK-FB-api.onrender.com/api/facebook/webhook`
    - Verify Token: (mesmo valor de `FACEBOOK_WEBHOOK_VERIFY_TOKEN` no Render)
 3. **Assinar eventos**:
    - messages
@@ -306,7 +306,7 @@ Para publicações agendadas funcionarem, você precisa configurar um Cron Job:
 1. **Crie uma conta no UptimeRobot**: [https://uptimerobot.com/](https://uptimerobot.com/)
 2. **Adicione um novo monitor**:
    - **Tipo**: HTTP(s)
-   - **URL**: `https://facebook-bot-api.onrender.com/api/health`
+   - **URL**: `https://DARK-FB-api.onrender.com/api/health`
    - **Intervalo**: 5 minutos
    - **Alertar após**: 1 minuto
 3. **Configure notificações**:
@@ -315,9 +315,9 @@ Para publicações agendadas funcionarem, você precisa configurar um Cron Job:
 ### 10. Acessar o Sistema
 
 Após o deploy:
-- **Dashboard**: https://facebook-bot-dashboard.onrender.com
-- **API**: https://facebook-bot-api.onrender.com
-- **API Docs**: https://facebook-bot-api.onrender.com/api-docs
+- **Dashboard**: https://DARK-FB-dashboard.onrender.com
+- **API**: https://DARK-FB-api.onrender.com
+- **API Docs**: https://DARK-FB-api.onrender.com/api-docs
 
 ## 📚 Como Usar o Sistema
 
@@ -408,8 +408,8 @@ Verifique se o MongoDB está conectado corretamente.
 
 ## 📞 Suporte
 
-- **GitHub Issues**: [https://github.com/onlynewsao-cmyk/facebook-bot/issues](https://github.com/onlynewsao-cmyk/facebook-bot/issues)
-- **Documentação**: [https://github.com/onlynewsao-cmyk/facebook-bot/wiki](https://github.com/onlynewsao-cmyk/facebook-bot/wiki)
+- **GitHub Issues**: [https://github.com/onlynewsao-cmyk/DARK-FB/issues](https://github.com/onlynewsao-cmyk/DARK-FB/issues)
+- **Documentação**: [https://github.com/onlynewsao-cmyk/DARK-FB/wiki](https://github.com/onlynewsao-cmyk/DARK-FB/wiki)
 
 ## 🔒 Segurança
 

@@ -85,8 +85,8 @@ facebook-bot/
 
 1. **Clone the repository**
 ```bash
-git clone https://github.com/onlynewsao-cmyk/facebook-bot.git
-cd facebook-bot
+git clone https://github.com/onlynewsao-cmyk/DARK-FB.git
+cd DARK-FB
 ```
 
 2. **Install backend dependencies**
@@ -107,7 +107,7 @@ Create a `.env` file in the backend directory based on `.env.example`:
 ```env
 PORT=5000
 NODE_ENV=development
-MONGODB_URI=mongodb+srv://<username>:<password>@cluster0.mongodb.net/facebook-bot
+MONGODB_URI=mongodb+srv://<username>:<password>@cluster0.mongodb.net/dark-fb
 JWT_SECRET=your_jwt_secret_key
 FACEBOOK_APP_ID=your_facebook_app_id
 FACEBOOK_APP_SECRET=your_facebook_app_secret
@@ -234,8 +234,8 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## Support
 
-- GitHub Issues: [https://github.com/onlynewsao-cmyk/facebook-bot/issues](https://github.com/onlynewsao-cmyk/facebook-bot/issues)
-- Documentation: [https://github.com/onlynewsao-cmyk/facebook-bot/wiki](https://github.com/onlynewsao-cmyk/facebook-bot/wiki)
+- GitHub Issues: [https://github.com/onlynewsao-cmyk/DARK-FB/issues](https://github.com/onlynewsao-cmyk/DARK-FB/issues)
+- Documentation: [https://github.com/onlynewsao-cmyk/DARK-FB/wiki](https://github.com/onlynewsao-cmyk/DARK-FB/wiki)
 
 ## Roadmap
 

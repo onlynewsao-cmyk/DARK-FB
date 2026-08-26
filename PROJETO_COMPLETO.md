@@ -22,7 +22,7 @@ Este é um **sistema completo de automação para Facebook** desenvolvido para o
 ## 📁 Estrutura do Projeto
 
 ```
-facebook-bot/
+DARK-FB/
 ├── backend/                          # Backend API
 │   ├── config/                       # Configurações
 │   ├── controllers/                  # Controladores
@@ -402,7 +402,7 @@ facebook-bot/
 git init
 git add .
 git commit -m "Initial commit"
-git remote add origin https://github.com/onlynewsao-cmyk/facebook-bot.git
+git remote add origin https://github.com/onlynewsao-cmyk/DARK-FB.git
 git push -u origin main
 ```
 
@@ -503,9 +503,9 @@ git push -u origin main
 
 ## 📞 Suporte
 
-- **GitHub**: [https://github.com/onlynewsao-cmyk/facebook-bot](https://github.com/onlynewsao-cmyk/facebook-bot)
-- **Issues**: [https://github.com/onlynewsao-cmyk/facebook-bot/issues](https://github.com/onlynewsao-cmyk/facebook-bot/issues)
-- **Wiki**: [https://github.com/onlynewsao-cmyk/facebook-bot/wiki](https://github.com/onlynewsao-cmyk/facebook-bot/wiki)
+- **GitHub**: [https://github.com/onlynewsao-cmyk/DARK-FB](https://github.com/onlynewsao-cmyk/DARK-FB)
+- **Issues**: [https://github.com/onlynewsao-cmyk/DARK-FB/issues](https://github.com/onlynewsao-cmyk/DARK-FB/issues)
+- **Wiki**: [https://github.com/onlynewsao-cmyk/DARK-FB/wiki](https://github.com/onlynewsao-cmyk/DARK-FB/wiki)
 
 ---
 
