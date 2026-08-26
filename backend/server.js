@@ -168,6 +168,7 @@ app.use((req, res, next) => {
 // Import routes
 const authRoutes = require('./routes/authRoutes');
 const facebookRoutes = require('./routes/facebookRoutes');
+const facebookAccountRoutes = require('./routes/facebookAccountRoutes');
 const postRoutes = require('./routes/postRoutes');
 const messageRoutes = require('./routes/messageRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
@@ -191,6 +192,7 @@ app.use('/api/', (req, res, next) => {
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/facebook', facebookRoutes);
+app.use('/api/facebook-accounts', facebookAccountRoutes);
 app.use('/api/posts', postRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/analytics', analyticsRoutes);

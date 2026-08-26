@@ -2,116 +2,19 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 /**
- * @swagger
- * components:
- *   schemas:
- *     User:
- *       type: object
- *       required:
- *         - email
- *         - name
- *       properties:
- *         name:
- *           type: string
- *           description: User's full name
- *         email:
- *           type: string
- *           format: email
- *           description: User's email address
- *         password:
- *           type: string
- *           format: password
- *           description: User's password (hashed)
- *         provider:
- *           type: string
- *           enum: [local, google, facebook, github]
- *           description: Authentication provider
- *         role:
- *           type: string
- *           enum: [admin, user, moderator]
- *           default: user
- *         isVerified:
- *           type: boolean
- *           default: false
- *         google:
- *           type: object
- *           properties:
- *             id:
- *               type: string
- *             email:
- *               type: string
- *             name:
- *               type: string
- *             avatar:
- *               type: string
- *         facebook:
- *           type: object
- *           properties:
- *             id:
- *               type: string
- *             email:
- *               type: string
- *             name:
- *               type: string
- *             avatar:
- *               type: string
- *             accessToken:
- *               type: string
- *         github:
- *           type: object
- *           properties:
- *             id:
- *               type: string
- *             email:
- *               type: string
- *             username:
- *               type: string
- *             name:
- *               type: string
- *             avatar:
- *               type: string
- *             accessToken:
- *               type: string
- *         facebookAccounts:
- *           type: array
- *           items:
- *             type: object
- *             properties:
- *               pageId:
- *                 type: string
- *               pageName:
- *                 type: string
- *               accessToken:
- *                 type: string
- *               permissions:
- *                 type: array
- *                 items:
- *                   type: string
- *         settings:
- *           type: object
- *           properties:
- *             theme:
- *               type: string
- *               enum: [light, dark, system]
- *               default: system
- *             language:
- *               type: string
- *               default: pt
- *             timezone:
- *               type: string
- *               default: Africa/Luanda
- *         lastLogin:
- *           type: string
- *           format: date-time
- *         createdAt:
- *           type: string
- *           format: date-time
- *         updatedAt:
- *           type: string
- *           format: date-time
+ * User Model - Extended for Multi-Facebook Account Management
+ * 
+ * Supports:
+ * - Multiple Facebook accounts per user
+ * - Multiple pages per Facebook account
+ * - Multiple groups per Facebook account
+ * - OAuth providers (Google, Facebook, GitHub)
+ * - Anti-ban settings per user
+ * - Custom settings
  */
 
 const userSchema = new mongoose.Schema({
+  // Basic user information
   name: {
     type: String,
     required: [true, 'Please provide a name'],
@@ -130,6 +33,8 @@ const userSchema = new mongoose.Schema({
     minlength: 8,
     select: false
   },
+  
+  // Authentication provider
   provider: {
     type: String,
     enum: ['local', 'google', 'facebook', 'github'],
@@ -139,25 +44,43 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  verificationToken: String,
+  verificationTokenExpires: Date,
+  resetPasswordToken: String,
+  resetPasswordExpires: Date,
+  
+  // User role
   role: {
     type: String,
     enum: ['admin', 'user', 'moderator'],
     default: 'user'
   },
+  
   // OAuth Providers
   google: {
     id: String,
     email: String,
     name: String,
-    avatar: String
+    avatar: String,
+    accessToken: String,
+    refreshToken: String
   },
+  
   facebook: {
     id: String,
     email: String,
     name: String,
     avatar: String,
-    accessToken: String
+    accessToken: String,
+    refreshToken: String,
+    tokenExpires: Date,
+    tokenType: {
+      type: String,
+      enum: ['short_lived', 'long_lived', 'never_expiring'],
+      default: 'short_lived'
+    }
   },
+  
   github: {
     id: String,
     email: String,
@@ -166,19 +89,134 @@ const userSchema = new mongoose.Schema({
     avatar: String,
     accessToken: String
   },
-  // Facebook Pages and Groups
+  
+  // Facebook Accounts - Main feature for multi-account management
   facebookAccounts: [{
-    pageId: String,
-    pageName: String,
-    accessToken: String,
-    pageAccessToken: String,
-    permissions: [String],
+    // Account identification
+    accountId: {
+      type: String,
+      required: true
+    },
+    accountName: String,
+    accountType: {
+      type: String,
+      enum: ['personal', 'business'],
+      default: 'personal'
+    },
+    
+    // Access tokens
+    accessToken: {
+      type: String,
+      required: true
+    },
+    refreshToken: String,
+    tokenExpires: Date,
+    tokenType: {
+      type: String,
+      enum: ['short_lived', 'long_lived', 'never_expiring'],
+      default: 'short_lived'
+    },
+    
+    // Connected Pages
+    pages: [{
+      pageId: {
+        type: String,
+        required: true
+      },
+      pageName: String,
+      pageAccessToken: String,
+      pagePicture: String,
+      fanCount: Number,
+      category: String,
+      permissions: [String],
+      isConnected: {
+        type: Boolean,
+        default: true
+      },
+      connectedAt: {
+        type: Date,
+        default: Date.now
+      },
+      // Page-specific settings
+      settings: {
+        autoPost: {
+          type: Boolean,
+          default: false
+        },
+        autoReply: {
+          type: Boolean,
+          default: false
+        },
+        replyMessage: String,
+        maxPostsPerDay: {
+          type: Number,
+          default: 50
+        },
+        notificationEnabled: {
+          type: Boolean,
+          default: true
+        }
+      }
+    }],
+    
+    // Connected Groups
+    groups: [{
+      groupId: {
+        type: String,
+        required: true
+      },
+      groupName: String,
+      groupPicture: String,
+      privacy: String,
+      memberCount: Number,
+      isAdmin: {
+        type: Boolean,
+        default: false
+      },
+      isConnected: {
+        type: Boolean,
+        default: true
+      },
+      connectedAt: {
+        type: Date,
+        default: Date.now
+      },
+      // Group-specific settings
+      settings: {
+        autoPost: {
+          type: Boolean,
+          default: false
+        },
+        maxPostsPerDay: {
+          type: Number,
+          default: 50
+        }
+      }
+    }],
+    
+    // Account settings
+    settings: {
+      defaultPage: String,
+      defaultGroup: String,
+      autoSelectDefault: {
+        type: Boolean,
+        default: true
+      }
+    },
+    
+    // Connection status
     isConnected: {
       type: Boolean,
       default: true
-    }
+    },
+    connectedAt: {
+      type: Date,
+      default: Date.now
+    },
+    lastSyncAt: Date
   }],
-  // User Settings
+  
+  // User settings
   settings: {
     theme: {
       type: String,
@@ -201,17 +239,25 @@ const userSchema = new mongoose.Schema({
       push: {
         type: Boolean,
         default: true
+      },
+      facebook: {
+        type: Boolean,
+        default: true
       }
+    },
+    defaultDashboardView: {
+      type: String,
+      enum: ['overview', 'posts', 'messages', 'analytics'],
+      default: 'overview'
     }
   },
-  profilePicture: String,
-  isActive: {
-    type: Boolean,
-    default: true
-  },
-  lastLogin: Date,
-  // Anti-ban settings
+  
+  // Anti-ban settings per user
   antiBan: {
+    enabled: {
+      type: Boolean,
+      default: true
+    },
     maxPostsPerHour: {
       type: Number,
       default: 50
@@ -220,14 +266,56 @@ const userSchema = new mongoose.Schema({
       type: Number,
       default: 20
     },
-    randomDelayEnabled: {
-      type: Boolean,
-      default: true
+    randomDelay: {
+      enabled: {
+        type: Boolean,
+        default: true
+      },
+      min: {
+        type: Number,
+        default: 1000
+      },
+      max: {
+        type: Number,
+        default: 5000
+      }
     },
     userAgentRotation: {
       type: Boolean,
       default: true
     }
+  },
+  
+  // Profile
+  profilePicture: String,
+  bio: String,
+  
+  // Status
+  isActive: {
+    type: Boolean,
+    default: true
+  },
+  lastLogin: Date,
+  
+  // Statistics
+  stats: {
+    totalPosts: {
+      type: Number,
+      default: 0
+    },
+    totalMessages: {
+      type: Number,
+      default: 0
+    },
+    totalPages: {
+      type: Number,
+      default: 0
+    },
+    totalGroups: {
+      type: Number,
+      default: 0
+    },
+    lastActivity: Date
   }
 }, {
   timestamps: true
@@ -250,84 +338,304 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
 
 // Method to add Facebook account
 userSchema.methods.addFacebookAccount = function(accountData) {
-  // Check if already exists
+  // Check if account already exists
   const existingIndex = this.facebookAccounts.findIndex(
-    acc => acc.pageId === accountData.pageId
+    acc => acc.accountId === accountData.accountId
   );
   
   if (existingIndex >= 0) {
-    this.facebookAccounts[existingIndex] = accountData;
+    // Update existing account
+    this.facebookAccounts[existingIndex] = {
+      ...this.facebookAccounts[existingIndex],
+      ...accountData,
+      isConnected: true,
+      connectedAt: new Date()
+    };
   } else {
-    this.facebookAccounts.push(accountData);
+    // Add new account
+    this.facebookAccounts.push({
+      ...accountData,
+      isConnected: true,
+      connectedAt: new Date()
+    });
   }
+  
+  // Update stats
+  this.stats.totalPages = this.facebookAccounts.reduce(
+    (sum, acc) => sum + (acc.pages?.length || 0), 0
+  );
+  this.stats.totalGroups = this.facebookAccounts.reduce(
+    (sum, acc) => sum + (acc.groups?.length || 0), 0
+  );
+  
   return this.save();
 };
 
 // Method to remove Facebook account
-userSchema.methods.removeFacebookAccount = function(pageId) {
+userSchema.methods.removeFacebookAccount = function(accountId) {
   this.facebookAccounts = this.facebookAccounts.filter(
-    account => account.pageId !== pageId
+    acc => acc.accountId !== accountId
   );
+  
+  // Update stats
+  this.stats.totalPages = this.facebookAccounts.reduce(
+    (sum, acc) => sum + (acc.pages?.length || 0), 0
+  );
+  this.stats.totalGroups = this.facebookAccounts.reduce(
+    (sum, acc) => sum + (acc.groups?.length || 0), 0
+  );
+  
   return this.save();
 };
 
-// Method to get connected pages
-userSchema.methods.getConnectedPages = function() {
-  return this.facebookAccounts.filter(acc => acc.isConnected !== false);
+// Method to add page to Facebook account
+userSchema.methods.addPageToAccount = function(accountId, pageData) {
+  const account = this.facebookAccounts.find(acc => acc.accountId === accountId);
+  
+  if (!account) {
+    throw new Error('Facebook account not found');
+  }
+  
+  // Check if page already exists
+  const existingIndex = account.pages.findIndex(p => p.pageId === pageData.pageId);
+  
+  if (existingIndex >= 0) {
+    account.pages[existingIndex] = {
+      ...account.pages[existingIndex],
+      ...pageData,
+      isConnected: true,
+      connectedAt: new Date()
+    };
+  } else {
+    account.pages.push({
+      ...pageData,
+      isConnected: true,
+      connectedAt: new Date()
+    });
+  }
+  
+  // Update stats
+  this.stats.totalPages = this.facebookAccounts.reduce(
+    (sum, acc) => sum + (acc.pages?.length || 0), 0
+  );
+  
+  return this.save();
 };
 
-// Method to update settings
+// Method to remove page from Facebook account
+userSchema.methods.removePageFromAccount = function(accountId, pageId) {
+  const account = this.facebookAccounts.find(acc => acc.accountId === accountId);
+  
+  if (!account) {
+    throw new Error('Facebook account not found');
+  }
+  
+  account.pages = account.pages.filter(p => p.pageId !== pageId);
+  
+  // Update stats
+  this.stats.totalPages = this.facebookAccounts.reduce(
+    (sum, acc) => sum + (acc.pages?.length || 0), 0
+  );
+  
+  return this.save();
+};
+
+// Method to add group to Facebook account
+userSchema.methods.addGroupToAccount = function(accountId, groupData) {
+  const account = this.facebookAccounts.find(acc => acc.accountId === accountId);
+  
+  if (!account) {
+    throw new Error('Facebook account not found');
+  }
+  
+  // Check if group already exists
+  const existingIndex = account.groups.findIndex(g => g.groupId === groupData.groupId);
+  
+  if (existingIndex >= 0) {
+    account.groups[existingIndex] = {
+      ...account.groups[existingIndex],
+      ...groupData,
+      isConnected: true,
+      connectedAt: new Date()
+    };
+  } else {
+    account.groups.push({
+      ...groupData,
+      isConnected: true,
+      connectedAt: new Date()
+    });
+  }
+  
+  // Update stats
+  this.stats.totalGroups = this.facebookAccounts.reduce(
+    (sum, acc) => sum + (acc.groups?.length || 0), 0
+  );
+  
+  return this.save();
+};
+
+// Method to remove group from Facebook account
+userSchema.methods.removeGroupFromAccount = function(accountId, groupId) {
+  const account = this.facebookAccounts.find(acc => acc.accountId === accountId);
+  
+  if (!account) {
+    throw new Error('Facebook account not found');
+  }
+  
+  account.groups = account.groups.filter(g => g.groupId !== groupId);
+  
+  // Update stats
+  this.stats.totalGroups = this.facebookAccounts.reduce(
+    (sum, acc) => sum + (acc.groups?.length || 0), 0
+  );
+  
+  return this.save();
+};
+
+// Method to get all connected pages
+userSchema.methods.getAllPages = function() {
+  return this.facebookAccounts.flatMap(acc => 
+    acc.pages.filter(p => p.isConnected)
+  );
+};
+
+// Method to get all connected groups
+userSchema.methods.getAllGroups = function() {
+  return this.facebookAccounts.flatMap(acc => 
+    acc.groups.filter(g => g.isConnected)
+  );
+};
+
+// Method to get page by ID
+userSchema.methods.getPageById = function(pageId) {
+  for (const account of this.facebookAccounts) {
+    const page = account.pages.find(p => p.pageId === pageId);
+    if (page) return page;
+  }
+  return null;
+};
+
+// Method to get group by ID
+userSchema.methods.getGroupById = function(groupId) {
+  for (const account of this.facebookAccounts) {
+    const group = account.groups.find(g => g.groupId === groupId);
+    if (group) return group;
+  }
+  return null;
+};
+
+// Method to get account by page ID
+userSchema.methods.getAccountByPageId = function(pageId) {
+  for (const account of this.facebookAccounts) {
+    if (account.pages.some(p => p.pageId === pageId)) {
+      return account;
+    }
+  }
+  return null;
+};
+
+// Method to get account by group ID
+userSchema.methods.getAccountByGroupId = function(groupId) {
+  for (const account of this.facebookAccounts) {
+    if (account.groups.some(g => g.groupId === groupId)) {
+      return account;
+    }
+  }
+  return null;
+};
+
+// Method to set default page
+userSchema.methods.setDefaultPage = function(pageId) {
+  // Check if page exists
+  const page = this.getPageById(pageId);
+  if (!page) {
+    throw new Error('Page not found');
+  }
+  
+  // Find the account that has this page
+  const account = this.getAccountByPageId(pageId);
+  if (!account) {
+    throw new Error('Account not found');
+  }
+  
+  // Update settings
+  if (!this.settings) this.settings = {};
+  this.settings.defaultPage = pageId;
+  
+  // Update account settings
+  account.settings = account.settings || {};
+  account.settings.defaultPage = pageId;
+  
+  return this.save();
+};
+
+// Method to set default group
+userSchema.methods.setDefaultGroup = function(groupId) {
+  const group = this.getGroupById(groupId);
+  if (!group) {
+    throw new Error('Group not found');
+  }
+  
+  const account = this.getAccountByGroupId(groupId);
+  if (!account) {
+    throw new Error('Account not found');
+  }
+  
+  if (!this.settings) this.settings = {};
+  this.settings.defaultGroup = groupId;
+  
+  account.settings = account.settings || {};
+  account.settings.defaultGroup = groupId;
+  
+  return this.save();
+};
+
+// Method to update anti-ban settings
+userSchema.methods.updateAntiBanSettings = function(newSettings) {
+  this.antiBan = { ...this.antiBan, ...newSettings };
+  return this.save();
+};
+
+// Method to update user settings
 userSchema.methods.updateSettings = function(newSettings) {
   this.settings = { ...this.settings, ...newSettings };
   return this.save();
 };
 
-// Static method to find by email or provider ID
-userSchema.statics.findByEmailOrProvider = async function(email, provider, providerId) {
-  return this.findOne({
-    $or: [
-      { email },
-      { [`${provider}.id`]: providerId }
-    ]
+// Static method to find user by Facebook account
+userSchema.statics.findByFacebookAccount = async function(accountId) {
+  return this.findOne({ 
+    'facebookAccounts.accountId': accountId 
   });
 };
 
-// Static method to find or create user from OAuth
-userSchema.statics.findOrCreateFromOAuth = async function(provider, profile) {
-  let user = await this.findOne({ [`${provider}.id`]: profile.id });
-  
-  if (!user) {
-    // Check if email exists
-    user = await this.findOne({ email: profile.email });
-    
-    if (user) {
-      // Link provider to existing user
-      user[provider] = {
-        id: profile.id,
-        email: profile.email,
-        name: profile.name,
-        avatar: profile.avatar
-      };
-      await user.save();
-    } else {
-      // Create new user
-      user = new this({
-        name: profile.name,
-        email: profile.email,
-        [provider]: {
-          id: profile.id,
-          email: profile.email,
-          name: profile.name,
-          avatar: profile.avatar
-        },
-        provider: provider,
-        isVerified: true
-      });
-      await user.save();
-    }
-  }
-  
-  return user;
+// Static method to find user by page
+userSchema.statics.findByPageId = async function(pageId) {
+  return this.findOne({ 
+    'facebookAccounts.pages.pageId': pageId 
+  });
 };
+
+// Static method to find user by group
+userSchema.statics.findByGroupId = async function(groupId) {
+  return this.findOne({ 
+    'facebookAccounts.groups.groupId': groupId 
+  });
+};
+
+// Static method to find users with active Facebook accounts
+userSchema.statics.findWithActiveAccounts = async function() {
+  return this.find({ 
+    'facebookAccounts.isConnected': true 
+  });
+};
+
+// Indexes for better query performance
+userSchema.index({ email: 1 }, { unique: true });
+userSchema.index({ 'facebookAccounts.accountId': 1 });
+userSchema.index({ 'facebookAccounts.pages.pageId': 1 });
+userSchema.index({ 'facebookAccounts.groups.groupId': 1 });
+userSchema.index({ role: 1 });
+userSchema.index({ isActive: 1 });
 
 module.exports = mongoose.model('User', userSchema);

@@ -55,14 +55,15 @@ class FacebookController {
         return res.status(404).json({ error: 'User not found' });
       }
       
-      // If user has connected Facebook account, use that token
-      if (user.facebook?.accessToken) {
-        const service = new FacebookService(user.facebook.accessToken);
-        const pages = await service.getUserPages();
-        return res.json(pages);
+      // Get all pages from all connected Facebook accounts
+      const allPages = user.getAllPages();
+      
+      if (allPages.length > 0) {
+        // Return all pages from all accounts
+        return res.json({ data: allPages });
       }
       
-      // Otherwise use default token
+      // If no accounts connected, use default token
       const pages = await this.service.getUserPages();
       res.json(pages);
     } catch (error) {
@@ -90,12 +91,15 @@ class FacebookController {
         return res.status(404).json({ error: 'User not found' });
       }
       
-      if (user.facebook?.accessToken) {
-        const service = new FacebookService(user.facebook.accessToken);
-        const groups = await service.getUserGroups();
-        return res.json(groups);
+      // Get all groups from all connected Facebook accounts
+      const allGroups = user.getAllGroups();
+      
+      if (allGroups.length > 0) {
+        // Return all groups from all accounts
+        return res.json({ data: allGroups });
       }
       
+      // If no accounts connected, use default token
       const groups = await this.service.getUserGroups();
       res.json(groups);
     } catch (error) {
@@ -156,18 +160,38 @@ class FacebookController {
 
       // Get user's Facebook account for this target
       const user = await User.findById(userId);
-      const facebookAccount = user.facebookAccounts.find(
-        acc => acc.pageId === targetId || acc.groupId === targetId
-      ) || user.facebook;
       
-      if (!facebookAccount) {
+      // Find the page or group across all accounts
+      let targetAccount = null;
+      let targetPage = null;
+      let targetGroup = null;
+      
+      if (targetType === 'page') {
+        targetPage = user.getPageById(targetId);
+        if (targetPage) {
+          targetAccount = user.getAccountByPageId(targetId);
+        }
+      } else if (targetType === 'group') {
+        targetGroup = user.getGroupById(targetId);
+        if (targetGroup) {
+          targetAccount = user.getAccountByGroupId(targetId);
+        }
+      }
+      
+      // Fallback to old facebook field for backward compatibility
+      if (!targetAccount && user.facebook?.accessToken) {
+        targetAccount = { accessToken: user.facebook.accessToken };
+      }
+      
+      if (!targetAccount) {
         return res.status(400).json({
           error: 'No Facebook account connected for this target'
         });
       }
       
-      const accessToken = facebookAccount.pageAccessToken || 
-                         facebookAccount.accessToken || 
+      const accessToken = targetPage?.pageAccessToken || 
+                         targetGroup?.groupAccessToken || 
+                         targetAccount?.accessToken || 
                          process.env.FACEBOOK_ACCESS_TOKEN;
       
       // Create post in database
@@ -296,9 +320,11 @@ class FacebookController {
     try {
       const { pageId, limit = 10 } = req.query;
       const user = await User.findById(req.user._id);
-      const facebookAccount = user.facebookAccounts.find(acc => acc.pageId === pageId);
+      const page = user.getPageById(pageId);
+      const account = user.getAccountByPageId(pageId);
       
-      const accessToken = facebookAccount?.pageAccessToken || 
+      const accessToken = page?.pageAccessToken || 
+                         account?.accessToken || 
                          user.facebook?.accessToken || 
                          process.env.FACEBOOK_ACCESS_TOKEN;
       
@@ -337,9 +363,11 @@ class FacebookController {
     try {
       const { pageId, limit = 10 } = req.query;
       const user = await User.findById(req.user._id);
-      const facebookAccount = user.facebookAccounts.find(acc => acc.pageId === pageId);
+      const page = user.getPageById(pageId);
+      const account = user.getAccountByPageId(pageId);
       
-      const accessToken = facebookAccount?.pageAccessToken || 
+      const accessToken = page?.pageAccessToken || 
+                         account?.accessToken || 
                          user.facebook?.accessToken || 
                          process.env.FACEBOOK_ACCESS_TOKEN;
       
@@ -377,11 +405,27 @@ class FacebookController {
   async getConversationMessages(req, res) {
     try {
       const { conversationId } = req.params;
-      const { limit = 10 } = req.query;
+      const { limit = 10, pageId } = req.query;
       const user = await User.findById(req.user._id);
-      const facebookAccount = user.facebookAccounts[0];
       
-      const accessToken = facebookAccount?.pageAccessToken || 
+      // If pageId is provided, use it to get the correct account
+      let page = null;
+      let account = null;
+      
+      if (pageId) {
+        page = user.getPageById(pageId);
+        account = user.getAccountByPageId(pageId);
+      } else {
+        // Use first available page
+        const allPages = user.getAllPages();
+        if (allPages.length > 0) {
+          page = allPages[0];
+          account = user.getAccountByPageId(page.pageId);
+        }
+      }
+      
+      const accessToken = page?.pageAccessToken || 
+                         account?.accessToken || 
                          user.facebook?.accessToken || 
                          process.env.FACEBOOK_ACCESS_TOKEN;
       
@@ -435,15 +479,16 @@ class FacebookController {
       const { pageId, recipientId, message, imageUrl, useProxy = false, useRandomDelay = true } = req.body;
       
       const user = await User.findById(req.user._id);
-      const facebookAccount = user.facebookAccounts.find(acc => acc.pageId === pageId);
+      const page = user.getPageById(pageId);
+      const account = user.getAccountByPageId(pageId);
       
-      if (!facebookAccount) {
+      if (!page && !account) {
         return res.status(400).json({
           error: 'Facebook account not connected for this page'
         });
       }
       
-      const accessToken = facebookAccount.pageAccessToken || facebookAccount.accessToken;
+      const accessToken = page?.pageAccessToken || account?.accessToken || user.facebook?.accessToken;
       
       const service = new FacebookService(accessToken);
       
@@ -466,7 +511,7 @@ class FacebookController {
         senderName: req.user.name,
         content: message,
         pageId,
-        pageName: facebookAccount.pageName || pageId,
+        pageName: page?.pageName || account?.accountName || pageId,
         metadata: {
           messageId: response?.message_id,
           threadId: response?.recipient_id
@@ -481,7 +526,7 @@ class FacebookController {
       });
 
       // Update analytics
-      await Analytics.updateAnalytics(pageId, facebookAccount.pageName || 'Unknown', {
+      await Analytics.updateAnalytics(pageId, page?.pageName || account?.accountName || 'Unknown', {
         metrics: { messagesReplied: 1 }
       });
 
@@ -516,9 +561,11 @@ class FacebookController {
     try {
       const { pageId } = req.query;
       const user = await User.findById(req.user._id);
-      const facebookAccount = user.facebookAccounts.find(acc => acc.pageId === pageId);
+      const page = user.getPageById(pageId);
+      const account = user.getAccountByPageId(pageId);
       
-      const accessToken = facebookAccount?.pageAccessToken || 
+      const accessToken = page?.pageAccessToken || 
+                         account?.accessToken || 
                          user.facebook?.accessToken || 
                          process.env.FACEBOOK_ACCESS_TOKEN;
       
@@ -624,17 +671,21 @@ class FacebookController {
     if (message) {
       const { mid, text, attachments, quick_reply } = message;
       
-      // Find user with this page
-      const users = await User.find({ 'facebookAccounts.pageId': pageId });
+      // Find users with this page (using new model structure)
+      const users = await User.find({ 'facebookAccounts.pages.pageId': pageId });
       
       for (const user of users) {
+        // Get the page name from the account
+        const page = user.getPageById(pageId);
+        const pageName = page?.pageName || recipient.id;
+        
         // Save message to database
         await Message.create({
           senderId: sender.id,
           senderName: sender.id, // Will be updated later
           content: text || '[Attachment]',
           pageId,
-          pageName: recipient.id,
+          pageName,
           metadata: {
             messageId: mid,
             threadId: recipient.id,
@@ -650,8 +701,8 @@ class FacebookController {
       }
       
       // Emit socket event for real-time updates
-      if (req.io) {
-        req.io.emit('new-message', {
+      if (this.io) {
+        this.io.emit('new-message', {
           pageId,
           senderId: sender.id,
           message: text || '[Attachment]',
@@ -669,6 +720,7 @@ class FacebookController {
         senderName: sender.id,
         content: `[Postback: ${title || payload}]`,
         pageId,
+        pageName: recipient.id,
         metadata: {
           messageId: event.postback.mid,
           threadId: recipient.id,
@@ -749,7 +801,7 @@ class FacebookController {
    */
   async connectFacebookAccount(req, res) {
     try {
-      const { accessToken, pageId, pageName } = req.body;
+      const { accessToken, pageId, pageName, accountId } = req.body;
       
       // Verify token
       const debugInfo = await this.service.debugToken(accessToken);
@@ -758,8 +810,9 @@ class FacebookController {
         return res.status(400).json({ error: 'Invalid access token' });
       }
       
-      // Get user pages
+      // Get user info and pages
       const tempService = new FacebookService(accessToken);
+      const userInfo = await tempService.getUserProfile('me', ['id', 'name', 'email']);
       const pages = await tempService.getUserPages();
       
       // Find the selected page
@@ -769,30 +822,32 @@ class FacebookController {
         return res.status(400).json({ error: 'Page not found' });
       }
       
-      // Add to user's Facebook accounts
+      // Add to user's Facebook accounts using the new model
       const user = await User.findById(req.user._id);
       
-      // Check if already connected
-      const existing = user.facebookAccounts.find(acc => acc.pageId === pageId);
-      
-      if (existing) {
-        // Update existing
-        existing.accessToken = accessToken;
-        existing.pageAccessToken = selectedPage.access_token;
-        existing.pageName = selectedPage.name || pageName;
-      } else {
-        // Add new
-        user.facebookAccounts.push({
+      // Prepare account data
+      const accountData = {
+        accountId: accountId || userInfo.id,
+        accountName: userInfo.name,
+        accountType: 'personal',
+        accessToken,
+        tokenExpires: new Date(Date.now() + (debugInfo.data.expires_in || 3600) * 1000),
+        tokenType: debugInfo.data.expires_in ? 'short_lived' : 'never_expiring',
+        pages: [{
           pageId: selectedPage.id,
-          pageName: selectedPage.name,
-          accessToken,
+          pageName: selectedPage.name || pageName,
           pageAccessToken: selectedPage.access_token,
           permissions: debugInfo.data.scopes || [],
-          isConnected: true
-        });
-      }
+          isConnected: true,
+          connectedAt: new Date()
+        }],
+        groups: [],
+        isConnected: true,
+        connectedAt: new Date()
+      };
       
-      await user.save();
+      // Add or update account
+      await user.addFacebookAccount(accountData);
       
       res.json({
         message: 'Facebook account connected successfully',
@@ -800,7 +855,8 @@ class FacebookController {
           id: selectedPage.id,
           name: selectedPage.name,
           accessToken: selectedPage.access_token
-        }
+        },
+        accountId: accountData.accountId
       });
     } catch (error) {
       res.status(500).json({ error: error.message });
@@ -830,11 +886,20 @@ class FacebookController {
       const { pageId } = req.params;
       
       const user = await User.findById(req.user._id);
-      user.facebookAccounts = user.facebookAccounts.filter(
-        acc => acc.pageId !== pageId
-      );
       
-      await user.save();
+      // Find which account has this page
+      const account = user.getAccountByPageId(pageId);
+      
+      if (account) {
+        // Remove page from account
+        await user.removePageFromAccount(account.accountId, pageId);
+      } else {
+        // Fallback: try to remove from facebookAccounts array (old structure)
+        user.facebookAccounts = user.facebookAccounts.filter(
+          acc => acc.pageId !== pageId
+        );
+        await user.save();
+      }
       
       res.json({ message: 'Facebook page disconnected successfully' });
     } catch (error) {
