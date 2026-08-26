@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import { Toaster } from 'react-hot-toast';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useCookies } from 'react-cookie';
 
 // Pages
 import LoginPage from './pages/LoginPage';
@@ -18,18 +19,25 @@ import SettingsPage from './pages/SettingsPage';
 import FacebookConnectPage from './pages/FacebookConnectPage';
 import ConversationPage from './pages/ConversationPage';
 import PostDetailPage from './pages/PostDetailPage';
+import AuthCallbackPage from './pages/AuthCallbackPage';
+import VerifyEmailPage from './pages/VerifyEmailPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 
 // Components
 import Sidebar from './components/Sidebar';
 import Navbar from './components/Navbar';
 import PrivateRoute from './components/PrivateRoute';
+import LoadingScreen from './components/LoadingScreen';
 
 // Context
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
+import { ThemeProvider } from './context/ThemeContext';
 
 // Styles
 import './styles/App.css';
+import './styles/Theme.css';
 
 // Set axios base URL
 axios.defaults.baseURL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
@@ -45,15 +53,55 @@ axios.interceptors.request.use((config) => {
   return Promise.reject(error);
 });
 
+// Response interceptor for token refresh
+axios.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+    
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      
+      try {
+        const refreshToken = localStorage.getItem('refreshToken');
+        if (refreshToken) {
+          const response = await axios.post('/auth/refresh', {}, {
+            headers: {
+              Authorization: `Bearer ${refreshToken}`
+            }
+          });
+          
+          const newToken = response.data.token;
+          localStorage.setItem('token', newToken);
+          
+          originalRequest.headers.Authorization = `Bearer ${newToken}`;
+          return axios(originalRequest);
+        }
+      } catch (err) {
+        // Token refresh failed, redirect to login
+        localStorage.removeItem('token');
+        localStorage.removeItem('refreshToken');
+        window.location.href = '/login';
+        return Promise.reject(err);
+      }
+    }
+    
+    return Promise.reject(error);
+  }
+);
+
 function AppContent() {
-  const { user, loading } = useAuth();
+  const { user, loading, theme } = useAuth();
   const [socket, setSocket] = useState(null);
+  const [cookies] = useCookies(['token']);
 
   useEffect(() => {
     if (user && user._id) {
       // Connect to socket.io
-      const newSocket = io(process.env.REACT_APP_API_URL || 'http://localhost:5000', {
-        query: { userId: user._id }
+      const newSocket = io(process.env.REACT_APP_SOCKET_URL || 'http://localhost:5000', {
+        query: { userId: user._id },
+        withCredentials: true,
+        transports: ['websocket', 'polling']
       });
       setSocket(newSocket);
       
@@ -64,27 +112,19 @@ function AppContent() {
   }, [user]);
 
   if (loading) {
-    return (
-      <div className="loading-screen">
-        <motion.div
-          className="loading-spinner"
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-        />
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   return (
     <SocketProvider value={socket}>
-      <div className="app">
+      <div className={`app ${theme}`}>
         <Toaster
           position="top-right"
           toastOptions={{
             duration: 4000,
             style: {
-              background: '#fff',
-              color: '#333',
+              background: theme === 'dark' ? '#333' : '#fff',
+              color: theme === 'dark' ? '#fff' : '#333',
               boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
               borderRadius: '8px',
               padding: '12px 16px'
@@ -109,6 +149,10 @@ function AppContent() {
             {/* Public routes */}
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
+            <Route path="/auth/callback" element={<AuthCallbackPage />} />
+            <Route path="/verify-email" element={<VerifyEmailPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
             
             {/* Protected routes */}
             <Route path="/" element={
@@ -163,11 +207,13 @@ import { Outlet } from 'react-router-dom';
 
 function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <AppContent />
-      </Router>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <Router>
+          <AppContent />
+        </Router>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 

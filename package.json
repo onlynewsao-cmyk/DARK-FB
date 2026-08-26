@@ -1,7 +1,7 @@
 {
-  "name": "facebook-bot",
-  "version": "1.0.0",
-  "description": "Complete Facebook automation bot with dashboard, scheduling, messaging, and analytics",
+  "name": "dark-fb",
+  "version": "2.0.0",
+  "description": "DARK-FB - Professional Facebook Bot with Anti-Ban Protection, Multi-Provider Authentication, and Advanced Features",
   "private": true,
   "workspaces": [
     "backend",
@@ -10,14 +10,21 @@
   "scripts": {
     "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
     "dev": "concurrently \"cd backend && npm run dev\" \"cd frontend && npm start\"",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm start",
     "build": "cd frontend && npm run build",
+    "build:all": "cd backend && npm install && cd ../frontend && npm install && npm run build",
     "start:backend": "cd backend && npm start",
     "start:frontend": "cd frontend && npm start",
     "test": "cd backend && npm test",
+    "test:frontend": "cd frontend && npm test",
     "lint": "cd backend && npm run lint",
-    "deploy": "echo 'Deploy to Render using render.yaml'",
+    "lint:frontend": "cd frontend && npm run lint",
+    "deploy": "echo 'Deploy to Render using render.yaml' && echo 'Repository: https://github.com/onlynewsao-cmyk/DARK-FB'",
+    "deploy:render": "echo '1. Push to GitHub: git push origin main' && echo '2. Deploy will be automatic via Render webhooks'",
     "logs:backend": "cd backend && tail -f logs/combined.log",
-    "logs:error": "cd backend && tail -f logs/error.log"
+    "logs:error": "cd backend && tail -f logs/error.log",
+    "clean": "rm -rf node_modules backend/node_modules frontend/node_modules"
   },
   "keywords": [
     "facebook",
@@ -26,7 +33,11 @@
     "messenger",
     "scheduler",
     "dashboard",
-    "api"
+    "api",
+    "anti-ban",
+    "multi-auth",
+    "oauth",
+    "professional"
   ],
   "author": "onlynewsao-cmyk",
   "license": "MIT",
@@ -35,5 +46,13 @@
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "bugs": {
+    "url": "https://github.com/onlynewsao-cmyk/DARK-FB/issues"
+  },
+  "homepage": "https://github.com/onlynewsao-cmyk/DARK-FB#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/onlynewsao-cmyk/DARK-FB.git"
   }
 }

@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { sendEmail } = require('../services/emailService');
 
 class AuthController {
   /**
@@ -27,9 +28,10 @@ class AuthController {
    *               password:
    *                 type: string
    *                 format: password
+   *                 minLength: 8
    *               role:
    *                 type: string
-   *                 enum: [admin, user]
+   *                 enum: [admin, user, moderator]
    *                 default: user
    *     responses:
    *       201:
@@ -52,13 +54,36 @@ class AuthController {
         name,
         email,
         password,
-        role
+        role,
+        provider: 'local'
       });
       
       await user.save();
       
       // Generate token
       const token = this.generateToken(user._id);
+      
+      // Generate verification token
+      const verificationToken = jwt.sign(
+        { id: user._id },
+        process.env.JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+      
+      // Send verification email (if email service is configured)
+      if (process.env.SMTP_HOST) {
+        const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/verify-email?token=${verificationToken}`;
+        await sendEmail({
+          to: user.email,
+          subject: 'Verify Your Email - DARK-FB',
+          html: `
+            <h1>Welcome to DARK-FB</h1>
+            <p>Please verify your email by clicking the link below:</p>
+            <a href="${verificationUrl}">Verify Email</a>
+            <p>This link will expire in 7 days.</p>
+          `
+        });
+      }
       
       res.status(201).json({
         message: 'User registered successfully',
@@ -67,7 +92,9 @@ class AuthController {
           id: user._id,
           name: user.name,
           email: user.email,
-          role: user.role
+          role: user.role,
+          provider: user.provider,
+          isVerified: user.isVerified
         }
       });
     } catch (error) {
@@ -123,6 +150,13 @@ class AuthController {
         });
       }
       
+      // Check if user is active
+      if (!user.isActive) {
+        return res.status(403).json({
+          error: 'Account is disabled'
+        });
+      }
+      
       // Generate token
       const token = this.generateToken(user._id);
       
@@ -134,6 +168,9 @@ class AuthController {
           name: user.name,
           email: user.email,
           role: user.role,
+          provider: user.provider,
+          isVerified: user.isVerified,
+          settings: user.settings,
           facebookAccounts: user.facebookAccounts,
           lastLogin: user.lastLogin
         }
@@ -233,12 +270,29 @@ class AuthController {
         { expiresIn: '1h' }
       );
       
-      // In a real app, you would send an email with the reset link
-      // For now, we'll just return the token
+      // Save reset token to user
+      user.resetPasswordToken = resetToken;
+      user.resetPasswordExpires = new Date(Date.now() + 3600000); // 1 hour
+      await user.save();
+      
+      // Send reset email
+      if (process.env.SMTP_HOST) {
+        const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`;
+        await sendEmail({
+          to: user.email,
+          subject: 'Password Reset - DARK-FB',
+          html: `
+            <h1>Password Reset</h1>
+            <p>You requested a password reset. Click the link below to reset your password:</p>
+            <a href="${resetUrl}">Reset Password</a>
+            <p>This link will expire in 1 hour.</p>
+            <p>If you didn't request this, please ignore this email.</p>
+          `
+        });
+      }
       
       res.json({
-        message: 'Password reset link generated',
-        resetToken
+        message: 'Password reset link sent to your email'
       });
     } catch (error) {
       res.status(500).json({ error: error.message });
@@ -266,6 +320,7 @@ class AuthController {
    *               newPassword:
    *                 type: string
    *                 format: password
+   *                 minLength: 8
    *     responses:
    *       200:
    *         description: Password reset successfully
@@ -283,8 +338,15 @@ class AuthController {
         return res.status(400).json({ error: 'Invalid token' });
       }
       
+      // Check if token expired
+      if (user.resetPasswordExpires && user.resetPasswordExpires < new Date()) {
+        return res.status(400).json({ error: 'Token expired' });
+      }
+      
       // Update password
       user.password = newPassword;
+      user.resetPasswordToken = undefined;
+      user.resetPasswordExpires = undefined;
       await user.save();
       
       // Generate new token
@@ -323,6 +385,7 @@ class AuthController {
    *               newPassword:
    *                 type: string
    *                 format: password
+   *                 minLength: 8
    *     responses:
    *       200:
    *         description: Password changed successfully
@@ -368,6 +431,275 @@ class AuthController {
       // We can add token to a blacklist if needed
       
       res.json({ message: 'Logout successful' });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/auth/settings:
+   *   get:
+   *     summary: Get user settings
+   *     tags: [Authentication]
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: User settings
+   */
+  async getSettings(req, res) {
+    try {
+      const user = await User.findById(req.user._id);
+      
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      
+      res.json({
+        settings: user.settings,
+        antiBan: user.antiBan
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/auth/settings:
+   *   put:
+   *     summary: Update user settings
+   *     tags: [Authentication]
+   *     security:
+   *       - bearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               theme:
+   *                 type: string
+   *                 enum: [light, dark, system]
+   *               language:
+   *                 type: string
+   *               timezone:
+   *                 type: string
+   *               notifications:
+   *                 type: object
+   *                 properties:
+   *                   email:
+   *                     type: boolean
+   *                   push:
+   *                     type: boolean
+   *     responses:
+   *       200:
+   *         description: Settings updated
+   */
+  async updateSettings(req, res) {
+    try {
+      const { settings, antiBan } = req.body;
+      
+      const user = await User.findById(req.user._id);
+      
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      
+      if (settings) {
+        user.settings = { ...user.settings, ...settings };
+      }
+      
+      if (antiBan) {
+        user.antiBan = { ...user.antiBan, ...antiBan };
+      }
+      
+      await user.save();
+      
+      res.json({
+        message: 'Settings updated successfully',
+        settings: user.settings,
+        antiBan: user.antiBan
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/auth/verify-email:
+   *   get:
+   *     summary: Verify email
+   *     tags: [Authentication]
+   *     parameters:
+   *       - in: query
+   *         name: token
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: Email verified
+   */
+  async verifyEmail(req, res) {
+    try {
+      const { token } = req.query;
+      
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      
+      const user = await User.findById(decoded.id);
+      
+      if (!user) {
+        return res.status(400).json({ error: 'Invalid token' });
+      }
+      
+      user.isVerified = true;
+      await user.save();
+      
+      res.json({ message: 'Email verified successfully' });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  // Provider connection methods
+  async connectGoogle(req, res) {
+    try {
+      // This would be handled by OAuth, but we can manually connect
+      const { accessToken } = req.body;
+      
+      // Get user profile from Google
+      const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: {
+          Authorization: `Bearer ${accessToken}`
+        }
+      });
+      
+      const profile = await response.json();
+      
+      const user = await User.findById(req.user._id);
+      
+      user.google = {
+        id: profile.sub,
+        email: profile.email,
+        name: profile.name,
+        avatar: profile.picture
+      };
+      
+      await user.save();
+      
+      res.json({
+        message: 'Google account connected',
+        google: user.google
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  async connectFacebook(req, res) {
+    try {
+      const { accessToken } = req.body;
+      
+      // Get user profile from Facebook
+      const response = await fetch(`https://graph.facebook.com/me?fields=id,name,email,picture&access_token=${accessToken}`);
+      const profile = await response.json();
+      
+      const user = await User.findById(req.user._id);
+      
+      user.facebook = {
+        id: profile.id,
+        email: profile.email,
+        name: profile.name,
+        avatar: profile.picture?.data?.url,
+        accessToken: accessToken
+      };
+      
+      await user.save();
+      
+      res.json({
+        message: 'Facebook account connected',
+        facebook: user.facebook
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  async connectGitHub(req, res) {
+    try {
+      const { accessToken } = req.body;
+      
+      // Get user profile from GitHub
+      const response = await fetch('https://api.github.com/user', {
+        headers: {
+          Authorization: `token ${accessToken}`
+        }
+      });
+      const profile = await response.json();
+      
+      // Get email
+      const emailResponse = await fetch('https://api.github.com/user/emails', {
+        headers: {
+          Authorization: `token ${accessToken}`
+        }
+      });
+      const emails = await emailResponse.json();
+      const primaryEmail = emails.find(e => e.primary)?.email || profile.email || `${profile.id}@github.com`;
+      
+      const user = await User.findById(req.user._id);
+      
+      user.github = {
+        id: profile.id,
+        email: primaryEmail,
+        username: profile.login,
+        name: profile.name,
+        avatar: profile.avatar_url,
+        accessToken: accessToken
+      };
+      
+      await user.save();
+      
+      res.json({
+        message: 'GitHub account connected',
+        github: user.github
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  async disconnectGoogle(req, res) {
+    try {
+      const user = await User.findById(req.user._id);
+      user.google = undefined;
+      await user.save();
+      res.json({ message: 'Google account disconnected' });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  async disconnectFacebook(req, res) {
+    try {
+      const user = await User.findById(req.user._id);
+      user.facebook = undefined;
+      await user.save();
+      res.json({ message: 'Facebook account disconnected' });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  async disconnectGitHub(req, res) {
+    try {
+      const user = await User.findById(req.user._id);
+      user.github = undefined;
+      await user.save();
+      res.json({ message: 'GitHub account disconnected' });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }

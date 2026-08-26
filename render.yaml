@@ -1,9 +1,12 @@
-# Render Configuration for Facebook Bot
+# Render Configuration for DARK-FB
+# Professional Facebook Bot with Anti-Ban Protection and Multi-Provider Authentication
 
-# Backend Service
+# ===========================================
+# Backend API Service
+# ===========================================
 services:
   - type: web
-    name: facebook-bot-api
+    name: dark-fb-api
     runtime: node
     region: oregon
     plan: free
@@ -15,14 +18,23 @@ services:
     buildCommand: npm install
     startCommand: npm start
     envVars:
+      # Server Configuration
       - key: NODE_ENV
         value: production
       - key: PORT
         value: 10000
+      
+      # MongoDB Configuration
       - key: MONGODB_URI
-        fromService: facebook-bot-mongodb
+        fromService: dark-fb-mongodb
+      
+      # JWT Configuration
       - key: JWT_SECRET
         generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 30d
+      
+      # Facebook API Configuration
       - key: FACEBOOK_APP_ID
         sync: false
       - key: FACEBOOK_APP_SECRET
@@ -31,13 +43,63 @@ services:
         sync: false
       - key: FACEBOOK_WEBHOOK_VERIFY_TOKEN
         generateValue: true
+      
+      # OAuth Providers
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GITHUB_CLIENT_ID
+        sync: false
+      - key: GITHUB_CLIENT_SECRET
+        sync: false
+      
+      # Session Configuration
+      - key: SESSION_SECRET
+        generateValue: true
+      
+      # Frontend Configuration
       - key: FRONTEND_URL
-        value: https://facebook-bot-dashboard.onrender.com
+        value: https://dark-fb-dashboard.onrender.com
+      - key: RENDER_URL
+        value: https://dark-fb-api.onrender.com
+      
+      # CORS Configuration
+      - key: CORS_ORIGIN
+        value: https://dark-fb-dashboard.onrender.com
+      - key: CORS_METHODS
+        value: GET,POST,PUT,DELETE,PATCH,OPTIONS
+      - key: CORS_CREDENTIALS
+        value: true
+      
+      # Rate Limiting & Anti-Ban
+      - key: RATE_LIMIT_ENABLED
+        value: true
+      - key: ANTI_BAN_ENABLED
+        value: true
+      - key: MAX_POSTS_PER_HOUR
+        value: 50
+      - key: MAX_MESSAGES_PER_MINUTE
+        value: 20
+      
+      # Feature Flags
+      - key: MULTI_PROVIDER_AUTH
+        value: true
+      - key: EMAIL_VERIFICATION
+        value: false
+      - key: REALTIME_NOTIFICATIONS
+        value: true
+      - key: ANALYTICS_ENABLED
+        value: true
+      - key: SCHEDULED_POSTS
+        value: true
     autoDeploy: true
 
-# Frontend Service
+# ===========================================
+# Frontend Dashboard Service
+# ===========================================
   - type: web
-    name: facebook-bot-dashboard
+    name: dark-fb-dashboard
     runtime: static
     region: oregon
     plan: free
@@ -50,33 +112,121 @@ services:
     publishDir: frontend/build
     envVars:
       - key: REACT_APP_API_URL
-        value: https://facebook-bot-api.onrender.com/api
+        value: https://dark-fb-api.onrender.com/api
+      - key: REACT_APP_SOCKET_URL
+        value: https://dark-fb-api.onrender.com
+      - key: REACT_APP_GOOGLE_CLIENT_ID
+        sync: false
+      - key: REACT_APP_FACEBOOK_APP_ID
+        sync: false
+      - key: REACT_APP_GITHUB_CLIENT_ID
+        sync: false
     autoDeploy: true
 
+# ===========================================
 # MongoDB Database
+# ===========================================
   - type: database
-    name: facebook-bot-mongodb
+    name: dark-fb-mongodb
     runtime: mongodb
     region: oregon
     plan: free
     ipAllowList:
       - source: 0.0.0.0/0
-        description: All IPs
+        description: All IPs (for development)
     autoDeploy: true
 
-# Cron Jobs for Scheduled Posts
+# ===========================================
+# Redis for Rate Limiting (Optional)
+# ===========================================
+  - type: database
+    name: dark-fb-redis
+    runtime: redis
+    region: oregon
+    plan: free
+    ipAllowList:
+      - source: 0.0.0.0/0
+        description: All IPs
+    autoDeploy: false
+
+# ===========================================
+# Cron Job for Scheduled Posts
+# ===========================================
   - type: cron
-    name: facebook-bot-scheduler
+    name: dark-fb-scheduler
     runtime: node
     region: oregon
     plan: free
     branch: main
     rootDir: backend
-    schedule: "* * * * *"
+    schedule: "* * * * *"  # Every minute
     startCommand: node scripts/scheduler.js
     envVars:
       - key: MONGODB_URI
-        fromService: facebook-bot-mongodb
+        fromService: dark-fb-mongodb
       - key: NODE_ENV
         value: production
+      - key: JWT_SECRET
+        fromService: dark-fb-api
+      - key: FACEBOOK_APP_ID
+        fromService: dark-fb-api
+      - key: FACEBOOK_APP_SECRET
+        fromService: dark-fb-api
     autoDeploy: true
+
+# ===========================================
+# Configuration Instructions
+# ===========================================
+# 
+# To deploy DARK-FB on Render:
+# 
+# 1. Create a new GitHub repository:
+#    git clone https://github.com/onlynewsao-cmyk/DARK-FB.git
+#    cd DARK-FB
+# 
+# 2. Connect your GitHub account to Render:
+#    https://dashboard.render.com/
+# 
+# 3. Create services using this render.yaml file:
+#    - Click "New" > "From render.yaml"
+#    - Upload this file or paste its contents
+#    - Click "Apply"
+# 
+# 4. Configure environment variables:
+#    - Go to each service's "Environment" tab
+#    - Add the required variables (marked with sync: false)
+#    - Get these from your providers (Facebook, Google, GitHub)
+# 
+# 5. Connect MongoDB:
+#    - The MongoDB service will be created automatically
+#    - Or use an existing MongoDB Atlas cluster
+# 
+# 6. Deploy!
+#    - Push to main branch: git push origin main
+#    - Render will automatically deploy your services
+# 
+# 7. Access your dashboard:
+#    - Frontend: https://dark-fb-dashboard.onrender.com
+#    - API: https://dark-fb-api.onrender.com
+#    - API Docs: https://dark-fb-api.onrender.com/api-docs
+#
+# ===========================================
+# Required Environment Variables
+# ===========================================
+#
+# Backend (dark-fb-api):
+# - FACEBOOK_APP_ID: Your Facebook App ID
+# - FACEBOOK_APP_SECRET: Your Facebook App Secret
+# - FACEBOOK_ACCESS_TOKEN: Long-lived Facebook Access Token
+# - FACEBOOK_WEBHOOK_VERIFY_TOKEN: Custom verify token
+# - GOOGLE_CLIENT_ID: Your Google OAuth Client ID
+# - GOOGLE_CLIENT_SECRET: Your Google OAuth Client Secret
+# - GITHUB_CLIENT_ID: Your GitHub OAuth Client ID
+# - GITHUB_CLIENT_SECRET: Your GitHub OAuth Client Secret
+#
+# Frontend (dark-fb-dashboard):
+# - REACT_APP_GOOGLE_CLIENT_ID: Same as backend GOOGLE_CLIENT_ID
+# - REACT_APP_FACEBOOK_APP_ID: Same as backend FACEBOOK_APP_ID
+# - REACT_APP_GITHUB_CLIENT_ID: Same as backend GITHUB_CLIENT_ID
+#
+# ===========================================

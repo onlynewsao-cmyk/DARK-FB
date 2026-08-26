@@ -4,10 +4,21 @@ const Post = require('../models/Post');
 const Message = require('../models/Message');
 const Analytics = require('../models/Analytics');
 const ScheduledPost = require('../models/ScheduledPost');
+const { getRandomUserAgent, getNextProxy } = require('../config/rateLimiter');
 
 class FacebookController {
   constructor() {
     this.service = new FacebookService(process.env.FACEBOOK_ACCESS_TOKEN);
+  }
+
+  // Get random user agent for anti-ban
+  getRandomUserAgent() {
+    return getRandomUserAgent();
+  }
+
+  // Get next proxy for anti-ban
+  getNextProxy() {
+    return getNextProxy();
   }
 
   /**
@@ -37,6 +48,21 @@ class FacebookController {
    */
   async getUserPages(req, res) {
     try {
+      // Get user's Facebook accounts
+      const user = await User.findById(req.user._id);
+      
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      
+      // If user has connected Facebook account, use that token
+      if (user.facebook?.accessToken) {
+        const service = new FacebookService(user.facebook.accessToken);
+        const pages = await service.getUserPages();
+        return res.json(pages);
+      }
+      
+      // Otherwise use default token
       const pages = await this.service.getUserPages();
       res.json(pages);
     } catch (error) {
@@ -58,6 +84,18 @@ class FacebookController {
    */
   async getUserGroups(req, res) {
     try {
+      const user = await User.findById(req.user._id);
+      
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      
+      if (user.facebook?.accessToken) {
+        const service = new FacebookService(user.facebook.accessToken);
+        const groups = await service.getUserGroups();
+        return res.json(groups);
+      }
+      
       const groups = await this.service.getUserGroups();
       res.json(groups);
     } catch (error) {
@@ -69,7 +107,7 @@ class FacebookController {
    * @swagger
    * /api/facebook/post:
    *   post:
-   *     summary: Create a post on Facebook page or group
+   *     summary: Create a post on Facebook page or group with anti-ban protection
    *     tags: [Facebook]
    *     security:
    *       - bearerAuth: []
@@ -100,15 +138,38 @@ class FacebookController {
    *               scheduledAt:
    *                 type: string
    *                 format: date-time
+   *               useProxy:
+   *                 type: boolean
+   *                 default: false
+   *               useRandomDelay:
+   *                 type: boolean
+   *                 default: true
    *     responses:
    *       201:
    *         description: Post created successfully
    */
   async createPost(req, res) {
     try {
-      const { targetId, targetType, content, mediaUrls = [], link, scheduledAt } = req.body;
+      const { targetId, targetType, content, mediaUrls = [], link, scheduledAt, 
+              useProxy = false, useRandomDelay = true } = req.body;
       const userId = req.user._id;
 
+      // Get user's Facebook account for this target
+      const user = await User.findById(userId);
+      const facebookAccount = user.facebookAccounts.find(
+        acc => acc.pageId === targetId || acc.groupId === targetId
+      ) || user.facebook;
+      
+      if (!facebookAccount) {
+        return res.status(400).json({
+          error: 'No Facebook account connected for this target'
+        });
+      }
+      
+      const accessToken = facebookAccount.pageAccessToken || 
+                         facebookAccount.accessToken || 
+                         process.env.FACEBOOK_ACCESS_TOKEN;
+      
       // Create post in database
       const post = new Post({
         content,
@@ -124,7 +185,12 @@ class FacebookController {
           url,
           type: this.getMediaType(url)
         })),
-        status: scheduledAt ? 'scheduled' : 'draft'
+        status: scheduledAt ? 'scheduled' : 'draft',
+        antiBan: {
+          useProxy,
+          useRandomDelay,
+          userAgent: useRandomDelay ? this.getRandomUserAgent() : undefined
+        }
       });
 
       await post.save();
@@ -139,7 +205,8 @@ class FacebookController {
             type: targetType,
             id: targetId
           },
-          timezone: req.user.timezone || 'UTC'
+          timezone: user.settings?.timezone || 'Africa/Luanda',
+          antiBan: post.antiBan
         });
 
         return res.status(201).json({
@@ -149,21 +216,29 @@ class FacebookController {
         });
       }
 
-      // Post immediately
+      // Post immediately with anti-ban protection
+      const service = new FacebookService(accessToken);
+      
+      // Apply random delay if enabled
+      if (useRandomDelay) {
+        const delay = Math.random() * 5000; // 0-5 seconds
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+
       let facebookResponse;
       if (targetType === 'page') {
         if (mediaUrls.length > 0) {
           // Post with media
           if (mediaUrls.length === 1) {
-            facebookResponse = await this.service.uploadPhotoFromUrl(targetId, mediaUrls[0], content);
+            facebookResponse = await service.uploadPhotoFromUrl(targetId, mediaUrls[0], content);
           } else {
-            facebookResponse = await this.service.postAlbum(targetId, content, mediaUrls);
+            facebookResponse = await service.postAlbum(targetId, content, mediaUrls);
           }
         } else {
-          facebookResponse = await this.service.postToPage(targetId, content, link);
+          facebookResponse = await service.postToPage(targetId, content, link);
         }
       } else if (targetType === 'group') {
-        facebookResponse = await this.service.postToGroup(targetId, content, link);
+        facebookResponse = await service.postToGroup(targetId, content, link);
       }
 
       // Update post with Facebook ID
@@ -171,6 +246,11 @@ class FacebookController {
       post.status = 'posted';
       post.postedAt = new Date();
       await post.save();
+
+      // Update analytics
+      await Analytics.updateAnalytics(post.target.id, post.target.name || 'Unknown', {
+        metrics: { postsPublished: 1 }
+      });
 
       res.status(201).json({
         message: 'Post created successfully',
@@ -215,7 +295,15 @@ class FacebookController {
   async getPagePosts(req, res) {
     try {
       const { pageId, limit = 10 } = req.query;
-      const posts = await this.service.getPagePosts(pageId, limit);
+      const user = await User.findById(req.user._id);
+      const facebookAccount = user.facebookAccounts.find(acc => acc.pageId === pageId);
+      
+      const accessToken = facebookAccount?.pageAccessToken || 
+                         user.facebook?.accessToken || 
+                         process.env.FACEBOOK_ACCESS_TOKEN;
+      
+      const service = new FacebookService(accessToken);
+      const posts = await service.getPagePosts(pageId, limit);
       res.json(posts);
     } catch (error) {
       res.status(500).json({ error: error.message });
@@ -248,7 +336,15 @@ class FacebookController {
   async getPageMessages(req, res) {
     try {
       const { pageId, limit = 10 } = req.query;
-      const conversations = await this.service.getPageMessages(pageId, limit);
+      const user = await User.findById(req.user._id);
+      const facebookAccount = user.facebookAccounts.find(acc => acc.pageId === pageId);
+      
+      const accessToken = facebookAccount?.pageAccessToken || 
+                         user.facebook?.accessToken || 
+                         process.env.FACEBOOK_ACCESS_TOKEN;
+      
+      const service = new FacebookService(accessToken);
+      const conversations = await service.getPageMessages(pageId, limit);
       res.json(conversations);
     } catch (error) {
       res.status(500).json({ error: error.message });
@@ -282,7 +378,15 @@ class FacebookController {
     try {
       const { conversationId } = req.params;
       const { limit = 10 } = req.query;
-      const messages = await this.service.getConversationMessages(conversationId, limit);
+      const user = await User.findById(req.user._id);
+      const facebookAccount = user.facebookAccounts[0];
+      
+      const accessToken = facebookAccount?.pageAccessToken || 
+                         user.facebook?.accessToken || 
+                         process.env.FACEBOOK_ACCESS_TOKEN;
+      
+      const service = new FacebookService(accessToken);
+      const messages = await service.getConversationMessages(conversationId, limit);
       res.json(messages);
     } catch (error) {
       res.status(500).json({ error: error.message });
@@ -293,7 +397,7 @@ class FacebookController {
    * @swagger
    * /api/facebook/send-message:
    *   post:
-   *     summary: Send a message via Messenger
+   *     summary: Send a message via Messenger with anti-ban
    *     tags: [Facebook]
    *     security:
    *       - bearerAuth: []
@@ -316,19 +420,44 @@ class FacebookController {
    *                 type: string
    *               imageUrl:
    *                 type: string
+   *               useProxy:
+   *                 type: boolean
+   *                 default: false
+   *               useRandomDelay:
+   *                 type: boolean
+   *                 default: true
    *     responses:
    *       201:
    *         description: Message sent successfully
    */
   async sendMessage(req, res) {
     try {
-      const { pageId, recipientId, message, imageUrl } = req.body;
+      const { pageId, recipientId, message, imageUrl, useProxy = false, useRandomDelay = true } = req.body;
+      
+      const user = await User.findById(req.user._id);
+      const facebookAccount = user.facebookAccounts.find(acc => acc.pageId === pageId);
+      
+      if (!facebookAccount) {
+        return res.status(400).json({
+          error: 'Facebook account not connected for this page'
+        });
+      }
+      
+      const accessToken = facebookAccount.pageAccessToken || facebookAccount.accessToken;
+      
+      const service = new FacebookService(accessToken);
+      
+      // Apply random delay if enabled
+      if (useRandomDelay) {
+        const delay = Math.random() * 3000; // 0-3 seconds
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
       
       let response;
       if (imageUrl) {
-        response = await this.service.sendMessageWithImage(pageId, recipientId, message, imageUrl);
+        response = await service.sendMessageWithImage(pageId, recipientId, message, imageUrl);
       } else {
-        response = await this.service.sendMessage(pageId, recipientId, message);
+        response = await service.sendMessage(pageId, recipientId, message);
       }
 
       // Save message to database
@@ -337,13 +466,23 @@ class FacebookController {
         senderName: req.user.name,
         content: message,
         pageId,
-        pageName: req.body.pageName || 'Unknown',
+        pageName: facebookAccount.pageName || pageId,
         metadata: {
           messageId: response?.message_id,
           threadId: response?.recipient_id
         },
         isRead: true,
-        isReplied: false
+        isReplied: false,
+        antiBan: {
+          useProxy,
+          useRandomDelay,
+          userAgent: useRandomDelay ? this.getRandomUserAgent() : undefined
+        }
+      });
+
+      // Update analytics
+      await Analytics.updateAnalytics(pageId, facebookAccount.pageName || 'Unknown', {
+        metrics: { messagesReplied: 1 }
       });
 
       res.status(201).json({
@@ -376,7 +515,15 @@ class FacebookController {
   async getPageInsights(req, res) {
     try {
       const { pageId } = req.query;
-      const insights = await this.service.getPageInsights(pageId);
+      const user = await User.findById(req.user._id);
+      const facebookAccount = user.facebookAccounts.find(acc => acc.pageId === pageId);
+      
+      const accessToken = facebookAccount?.pageAccessToken || 
+                         user.facebook?.accessToken || 
+                         process.env.FACEBOOK_ACCESS_TOKEN;
+      
+      const service = new FacebookService(accessToken);
+      const insights = await service.getPageInsights(pageId);
       res.json(insights);
     } catch (error) {
       res.status(500).json({ error: error.message });
@@ -471,31 +618,36 @@ class FacebookController {
   }
 
   async handleMessagingEvent(pageId, event) {
-    const { sender, recipient, timestamp, message, postback, read, delivery } = event;
+    const { message, sender, recipient, timestamp } = event;
     
     // Handle message
     if (message) {
       const { mid, text, attachments, quick_reply } = message;
       
-      // Save message to database
-      await Message.create({
-        senderId: sender.id,
-        senderName: sender.id, // Will be updated later
-        content: text || '[Attachment]',
-        pageId,
-        pageName: recipient.id,
-        metadata: {
-          messageId: mid,
-          threadId: recipient.id,
-          timestamp
-        },
-        attachments: attachments ? attachments.map(a => ({
-          url: a.payload?.url,
-          type: a.type,
-          name: a.title || a.url?.split('/').pop()
-        })) : [],
-        tags: quick_reply ? [quick_reply.payload] : []
-      });
+      // Find user with this page
+      const users = await User.find({ 'facebookAccounts.pageId': pageId });
+      
+      for (const user of users) {
+        // Save message to database
+        await Message.create({
+          senderId: sender.id,
+          senderName: sender.id, // Will be updated later
+          content: text || '[Attachment]',
+          pageId,
+          pageName: recipient.id,
+          metadata: {
+            messageId: mid,
+            threadId: recipient.id,
+            timestamp
+          },
+          attachments: attachments ? attachments.map(a => ({
+            url: a.payload?.url,
+            type: a.type,
+            name: a.title || a.url?.split('/').pop()
+          })) : [],
+          tags: quick_reply ? [quick_reply.payload] : []
+        });
+      }
       
       // Emit socket event for real-time updates
       if (req.io) {
@@ -509,8 +661,8 @@ class FacebookController {
     }
     
     // Handle postback (button clicks)
-    if (postback) {
-      const { payload, title } = postback;
+    if (event.postback) {
+      const { payload, title } = event.postback;
       
       await Message.create({
         senderId: sender.id,
@@ -518,7 +670,7 @@ class FacebookController {
         content: `[Postback: ${title || payload}]`,
         pageId,
         metadata: {
-          messageId: postback.mid,
+          messageId: event.postback.mid,
           threadId: recipient.id,
           timestamp
         },
@@ -527,7 +679,7 @@ class FacebookController {
     }
     
     // Handle read receipts
-    if (read) {
+    if (event.read) {
       await Message.updateMany(
         { 
           pageId, 
@@ -565,14 +717,6 @@ class FacebookController {
           }
         }
         break;
-        
-      case 'reactions':
-        // Handle reactions
-        break;
-        
-      case 'comments':
-        // Handle comments
-        break;
     }
   }
 
@@ -594,6 +738,10 @@ class FacebookController {
    *               - accessToken
    *             properties:
    *               accessToken:
+   *                 type: string
+   *               pageId:
+   *                 type: string
+   *               pageName:
    *                 type: string
    *     responses:
    *       200:
@@ -639,7 +787,8 @@ class FacebookController {
           pageName: selectedPage.name,
           accessToken,
           pageAccessToken: selectedPage.access_token,
-          permissions: debugInfo.data.scopes || []
+          permissions: debugInfo.data.scopes || [],
+          isConnected: true
         });
       }
       

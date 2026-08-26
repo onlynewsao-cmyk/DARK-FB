@@ -1,8 +1,11 @@
 {
-  "name": "facebook-bot-dashboard",
-  "version": "1.0.0",
+  "name": "dark-fb-dashboard",
+  "version": "2.0.0",
   "private": true,
+  "description": "DARK-FB - Professional Dashboard with Multi-Provider Auth and Anti-Ban Features",
   "dependencies": {
+    "@google-oauth/google-api-javascript-client": "^1.0.0",
+    "@react-oauth/google": "^0.12.1",
     "@testing-library/jest-dom": "^5.17.0",
     "@testing-library/react": "^13.4.0",
     "@testing-library/user-event": "^13.5.0",
@@ -13,7 +16,9 @@
     "framer-motion": "^10.16.16",
     "lucide-react": "^0.294.0",
     "react": "^18.2.0",
+    "react-cookie": "^4.1.1",
     "react-dom": "^18.2.0",
+    "react-facebook-login": "^4.1.1",
     "react-hot-toast": "^2.4.1",
     "react-router-dom": "^6.21.0",
     "react-scripts": "5.0.1",
@@ -26,7 +31,9 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "lint": "eslint src/ --ext js,jsx",
+    "format": "prettier --write \"src/**/*.{js,jsx,css}\""
   },
   "eslintConfig": {
     "extends": [
@@ -46,5 +53,13 @@
       "last 1 safari version"
     ]
   },
-  "proxy": "http://localhost:5000"
+  "proxy": "http://localhost:5000",
+  "homepage": ".",
+  "bugs": {
+    "url": "https://github.com/onlynewsao-cmyk/DARK-FB/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/onlynewsao-cmyk/DARK-FB.git"
+  }
 }
