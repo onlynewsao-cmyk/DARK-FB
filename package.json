@@ -1,0 +1,39 @@
+{
+  "name": "facebook-bot",
+  "version": "1.0.0",
+  "description": "Complete Facebook automation bot with dashboard, scheduling, messaging, and analytics",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "dev": "concurrently \"cd backend && npm run dev\" \"cd frontend && npm start\"",
+    "build": "cd frontend && npm run build",
+    "start:backend": "cd backend && npm start",
+    "start:frontend": "cd frontend && npm start",
+    "test": "cd backend && npm test",
+    "lint": "cd backend && npm run lint",
+    "deploy": "echo 'Deploy to Render using render.yaml'",
+    "logs:backend": "cd backend && tail -f logs/combined.log",
+    "logs:error": "cd backend && tail -f logs/error.log"
+  },
+  "keywords": [
+    "facebook",
+    "bot",
+    "automation",
+    "messenger",
+    "scheduler",
+    "dashboard",
+    "api"
+  ],
+  "author": "onlynewsao-cmyk",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "monitors": [
+    {
+      "name": "Facebook Bot API - Health Check",
+      "type": "http",
+      "url": "https://facebook-bot-api.onrender.com/api/health",
+      "interval": 300,
+      "alertAfter": 60,
+      "alertContacts": ["default"],
+      "description": "Checks if the Facebook Bot API is healthy",
+      "httpMethod": "GET",
+      "httpHeaders": {
+        "Accept": "application/json"
+      },
+      "expectedStatusCode": 200,
+      "expectedContent": "healthy"
+    },
+    {
+      "name": "Facebook Bot Dashboard",
+      "type": "http",
+      "url": "https://facebook-bot-dashboard.onrender.com",
+      "interval": 300,
+      "alertAfter": 60,
+      "alertContacts": ["default"],
+      "description": "Checks if the dashboard is accessible",
+      "httpMethod": "GET",
+      "expectedStatusCode": 200
+    },
+    {
+      "name": "Facebook Bot API - Posts Endpoint",
+      "type": "http",
+      "url": "https://facebook-bot-api.onrender.com/api/posts",
+      "interval": 600,
+      "alertAfter": 120,
+      "alertContacts": ["default"],
+      "description": "Checks if the posts endpoint is working",
+      "httpMethod": "GET",
+      "httpHeaders": {
+        "Authorization": "Bearer YOUR_TOKEN_HERE",
+        "Accept": "application/json"
+      },
+      "expectedStatusCode": 200
+    }
+  ],
+  "alertContacts": [
+    {
+      "name": "default",
+      "type": "email",
+      "email": "your-email@example.com",
+      "isDefault": true
+    }
+  ],
+  "settings": {
+    "checkInterval": 60,
+    "maxAlertsPerMonitor": 3,
+    "alertCooldown": 300
+  }
+}

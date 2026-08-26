@@ -1,0 +1,82 @@
+# Render Configuration for Facebook Bot
+
+# Backend Service
+services:
+  - type: web
+    name: facebook-bot-api
+    runtime: node
+    region: oregon
+    plan: free
+    branch: main
+    rootDir: backend
+    buildFilter:
+      paths:
+        - backend/**
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MONGODB_URI
+        fromService: facebook-bot-mongodb
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FACEBOOK_APP_ID
+        sync: false
+      - key: FACEBOOK_APP_SECRET
+        sync: false
+      - key: FACEBOOK_ACCESS_TOKEN
+        sync: false
+      - key: FACEBOOK_WEBHOOK_VERIFY_TOKEN
+        generateValue: true
+      - key: FRONTEND_URL
+        value: https://facebook-bot-dashboard.onrender.com
+    autoDeploy: true
+
+# Frontend Service
+  - type: web
+    name: facebook-bot-dashboard
+    runtime: static
+    region: oregon
+    plan: free
+    branch: main
+    rootDir: frontend
+    buildFilter:
+      paths:
+        - frontend/**
+    buildCommand: npm install && npm run build
+    publishDir: frontend/build
+    envVars:
+      - key: REACT_APP_API_URL
+        value: https://facebook-bot-api.onrender.com/api
+    autoDeploy: true
+
+# MongoDB Database
+  - type: database
+    name: facebook-bot-mongodb
+    runtime: mongodb
+    region: oregon
+    plan: free
+    ipAllowList:
+      - source: 0.0.0.0/0
+        description: All IPs
+    autoDeploy: true
+
+# Cron Jobs for Scheduled Posts
+  - type: cron
+    name: facebook-bot-scheduler
+    runtime: node
+    region: oregon
+    plan: free
+    branch: main
+    rootDir: backend
+    schedule: "* * * * *"
+    startCommand: node scripts/scheduler.js
+    envVars:
+      - key: MONGODB_URI
+        fromService: facebook-bot-mongodb
+      - key: NODE_ENV
+        value: production
+    autoDeploy: true
